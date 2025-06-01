@@ -34,8 +34,8 @@ export async function POST(req: NextRequest) {
 
     console.log("Processing query:", query)
 
-    // Get the generative model
-    const model = genAI.getGenerativeModel({ model: "gemini-pro" })
+    // Get the generative model - Updated to use the correct model name
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" })
 
     // Generate main response
     let text
@@ -55,8 +55,16 @@ export async function POST(req: NextRequest) {
         )
       } else if (error.message?.includes("QUOTA_EXCEEDED")) {
         return NextResponse.json({ error: "API quota exceeded. Please try again later." }, { status: 429 })
+      } else if (error.status === 404) {
+        return NextResponse.json(
+          { error: "Model not found. The API might be experiencing issues. Please try again later." },
+          { status: 500 },
+        )
       } else {
-        return NextResponse.json({ error: "Failed to generate response. Please try again." }, { status: 500 })
+        return NextResponse.json(
+          { error: `Failed to generate response: ${error.message}. Please try again.` },
+          { status: 500 },
+        )
       }
     }
 
@@ -103,5 +111,6 @@ export async function GET() {
     method: "Use POST to send messages",
     router: "App Router",
     hasApiKey: !!process.env.GEMINI_API_KEY,
+    modelUsed: "gemini-1.5-flash",
   })
 }
