@@ -1,35 +1,52 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { Moon, Sun } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { useState, useEffect } from "react";
+import { Moon, Sun } from "lucide-react";
 
 export default function DarkModeToggle() {
-  const [darkMode, setDarkMode] = useState(false)
+  const [darkMode, setDarkMode] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    const isDark = localStorage.getItem("darkMode") === "true"
-    setDarkMode(isDark)
-    if (isDark) {
-      document.documentElement.classList.add("dark")
+    setMounted(true);
+    const savedTheme = localStorage.getItem("theme");
+    const systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+
+    const initialDarkMode = savedTheme === "dark" || (!savedTheme && systemPrefersDark);
+    setDarkMode(initialDarkMode);
+    if (initialDarkMode) {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
     }
-  }, [])
+  }, []);
 
   const toggleDarkMode = () => {
-    const newDarkMode = !darkMode
-    setDarkMode(newDarkMode)
-    localStorage.setItem("darkMode", newDarkMode.toString())
-
+    const newDarkMode = !darkMode;
+    setDarkMode(newDarkMode);
     if (newDarkMode) {
-      document.documentElement.classList.add("dark")
+      document.documentElement.classList.add("dark");
     } else {
-      document.documentElement.classList.remove("dark")
+      document.documentElement.classList.remove("dark");
     }
+    localStorage.setItem("theme", newDarkMode ? "dark" : "light");
+  };
+
+  if (!mounted) {
+    return <div className="w-9 h-9 rounded-lg bg-muted"></div>;
   }
 
   return (
-    <Button variant="outline" size="icon" onClick={toggleDarkMode} aria-label="Toggle dark mode">
-      {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-    </Button>
-  )
+    <button
+      onClick={toggleDarkMode}
+      className="w-9 h-9 rounded-lg flex items-center justify-center hover:bg-muted transition-colors"
+      aria-label="Toggle theme"
+    >
+      {darkMode ? (
+        <Sun className="w-5 h-5 text-muted-foreground" />
+      ) : (
+        <Moon className="w-5 h-5 text-muted-foreground" />
+      )}
+    </button>
+  );
 }
