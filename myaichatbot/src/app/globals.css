@@ -11,7 +11,7 @@
 }
 
 body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
@@ -48,9 +48,9 @@ body.dark {
   --accent: #60a5fa; /* Lighter blue for dark mode */
   --accent-hover: #3b82f6; /* Darker blue hover */
   --user-message-bg: #4b5cb4; /* Darker blue for user message in dark mode */
-  --user-message-text: #1f2937; /* Dark text for user messages */
+  --user-message-text: #f9fafb; /* Light text for user messages in dark mode */
   --ai-message-bg: #2d3748; /* Dark AI message */
-  --ai-message-text: #1f2937; /* Dark text for AI messages */
+  --ai-message-text: #f9fafb; /* Light text for AI messages in dark mode */
   --shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
   --error-bg: #7f1d1d20; /* Dark red for errors */
   --error-text: #f87171; /* Light red error text */
@@ -81,7 +81,9 @@ body.dark {
 }
 
 /* Typography */
-h1, h2, h3 {
+h1,
+h2,
+h3 {
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -497,6 +499,38 @@ input:disabled {
   cursor: not-allowed;
 }
 
+/* Textarea styling */
+.chat-textarea {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  width: 100%;
+  min-height: 2.75rem;
+  max-height: 150px;
+  resize: none;
+  overflow-y: auto;
+  line-height: 1.5;
+  font-family: inherit;
+}
+
+.chat-textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.chat-textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.chat-textarea:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 /* Avatar */
 .avatar {
   width: 2rem;
@@ -562,7 +596,9 @@ input:disabled {
 }
 
 @keyframes typing {
-  0%, 60%, 100% {
+  0%,
+  60%,
+  100% {
     transform: translateY(0);
   }
   30% {
@@ -617,4 +653,54 @@ input:disabled {
 
 .hover-scale:hover {
   transform: scale(1.02);
+}
+
+/* Message Content Styling */
+.message-content {
+  font-weight: 500;
+  color: var(--text-primary);
+  word-break: break-word;
+  overflow-wrap: break-word;
+  max-height: 300px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.message-content::-webkit-scrollbar {
+  width: 4px;
+}
+
+.message-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.message-content::-webkit-scrollbar-thumb {
+  background: var(--text-muted);
+  border-radius: 2px;
+}
+
+.message-content::-webkit-scrollbar-thumb:hover {
+  background: var(--text-secondary);
+}
+
+/* Ensure proper text wrapping */
+.break-words {
+  word-break: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
+}
+
+/* Message container */
+.message-container {
+  max-width: 45%;
+  border-radius: 1rem;
+  padding: 1rem;
+  box-shadow: var(--shadow);
+  position: relative;
+}
+
+@media (max-width: 640px) {
+  .message-container {
+    max-width: 65%;
+  }
 }

@@ -1,62 +1,77 @@
-"use client";
+"use client"
 
-import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
-import { auth } from "@/lib/firebase";
-import { onAuthStateChanged, signOut } from "firebase/auth";
-import { Send, LogOut, Bot, User, Copy } from "lucide-react";
-import DarkModeToggle from "@/components/dark-mode-toggle";
+import type React from "react"
+
+import { useState, useEffect, useRef } from "react"
+import { useRouter } from "next/navigation"
+import { auth } from "@/lib/firebase"
+import { onAuthStateChanged, signOut } from "firebase/auth"
+import { Send, LogOut, Bot, User, Copy } from "lucide-react"
+import DarkModeToggle from "@/components/dark-mode-toggle"
 
 interface Message {
-  id: string;
-  content: string;
-  sender: "user" | "ai";
-  timestamp: Date;
+  id: string
+  content: string
+  sender: "user" | "ai"
+  timestamp: Date
 }
 
 export default function ChatPage() {
-  const [user, setUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState("");
-  const [isTyping, setIsTyping] = useState(false);
-  const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [error, setError] = useState("");
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const router = useRouter();
+  const [user, setUser] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [messages, setMessages] = useState<Message[]>([])
+  const [input, setInput] = useState("")
+  const [isTyping, setIsTyping] = useState(false)
+  const [suggestions, setSuggestions] = useState<string[]>([])
+  const [error, setError] = useState("")
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const router = useRouter()
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
-        setUser(user);
-        setLoading(false);
+        setUser(user)
+        setLoading(false)
       } else {
-        router.push("/");
+        router.push("/")
       }
-    });
-    return () => unsubscribe();
-  }, [router]);
+    })
+    return () => unsubscribe()
+  }, [router])
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
+  }, [messages])
+
+  // Auto-resize textarea as user types
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "2.75rem" // Reset height
+      const scrollHeight = textareaRef.current.scrollHeight
+      textareaRef.current.style.height = `${Math.min(scrollHeight, 150)}px` // Limit max height
+    }
+  }, [input])
 
   const handleSendMessage = async (messageText?: string) => {
-    const text = messageText || input.trim();
-    if (!text) return;
+    const text = messageText || input.trim()
+    if (!text) return
+
+    // Limit message length to 2000 characters
+    const limitedText = text.length > 2000 ? text.substring(0, 2000) + "..." : text
 
     const userMessage: Message = {
       id: Date.now().toString(),
-      content: text,
+      content: limitedText,
       sender: "user",
       timestamp: new Date(),
-    };
+    }
 
-    setMessages((prev) => [...prev, userMessage]);
-    setInput("");
-    setIsTyping(true);
-    setError("");
-    setSuggestions([]);
+    setMessages((prev) => [...prev, userMessage])
+    setInput("")
+    setIsTyping(true)
+    setError("")
+    setSuggestions([])
 
     try {
       const response = await fetch("/api/chat", {
@@ -65,52 +80,62 @@ export default function ChatPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ query: text }),
-      });
+      })
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        const errorData = await response.json()
+        throw new Error(errorData.error || `HTTP error! status: ${response.status}`)
       }
 
-      const data = await response.json();
+      const data = await response.json()
+
+      // Limit AI response length if needed
+      const aiContent = data.response.length > 5000 ? data.response.substring(0, 5000) + "..." : data.response
 
       const aiMessage: Message = {
         id: (Date.now() + 1).toString(),
-        content: data.response,
+        content: aiContent,
         sender: "ai",
         timestamp: new Date(),
-      };
+      }
 
-      setMessages((prev) => [...prev, aiMessage]);
-      setSuggestions(data.suggestions || []);
+      setMessages((prev) => [...prev, aiMessage])
+      setSuggestions(data.suggestions || [])
     } catch (error: any) {
-      console.error("Error sending message:", error);
-      setError(error.message || "Failed to get response");
+      console.error("Error sending message:", error)
+      setError(error.message || "Failed to get response")
 
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         content: `Sorry, I encountered an error: ${error.message}. Please try again.`,
         sender: "ai",
         timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, errorMessage]);
+      }
+      setMessages((prev) => [...prev, errorMessage])
     } finally {
-      setIsTyping(false);
+      setIsTyping(false)
     }
-  };
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault()
+      handleSendMessage()
+    }
+  }
 
   const handleSignOut = async () => {
     try {
-      await signOut(auth);
-      router.push("/");
+      await signOut(auth)
+      router.push("/")
     } catch (error) {
-      console.error("Error signing out:", error);
+      console.error("Error signing out:", error)
     }
-  };
+  }
 
   const copyMessage = (content: string) => {
-    navigator.clipboard.writeText(content);
-  };
+    navigator.clipboard.writeText(content)
+  }
 
   if (loading) {
     return (
@@ -120,7 +145,7 @@ export default function ChatPage() {
           <p className="text-sm text-muted-foreground">Loading...</p>
         </div>
       </div>
-    );
+    )
   }
 
   return (
@@ -180,15 +205,11 @@ export default function ChatPage() {
               </div>
               <h3 className="text-xl font-semibold mb-3 text-foreground">Welcome to AI Assistant</h3>
               <p className="text-sm mb-8 max-w-md mx-auto text-muted-foreground">
-                I’m here to assist you with information, creative tasks, or just a friendly chat. What’s on your mind?
+                I'm here to assist you with information, creative tasks, or just a friendly chat. What's on your mind?
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-lg mx-auto">
                 {["Tell me a joke", "Explain quantum physics", "Write a poem", "Help me code"].map((prompt) => (
-                  <button
-                    key={prompt}
-                    onClick={() => handleSendMessage(prompt)}
-                    className="btn-starter hover-scale"
-                  >
+                  <button key={prompt} onClick={() => handleSendMessage(prompt)} className="btn-starter hover-scale">
                     {prompt}
                   </button>
                 ))}
@@ -210,17 +231,16 @@ export default function ChatPage() {
               )}
 
               <div
-                className={`group max-w-[80%] sm:max-w-[70%] ${message.sender === "user" ? "order-1" : ""}`}
+                className={`group message-container ${message.sender === "user" ? "order-1" : ""}`}
                 style={{
                   background: message.sender === "user" ? "var(--user-message-bg)" : "var(--ai-message-bg)",
                   color: message.sender === "user" ? "var(--user-message-text)" : "var(--ai-message-text)",
-                  padding: "1rem",
-                  borderRadius: "1rem",
-                  boxShadow: "var(--shadow)",
                   border: message.sender === "ai" ? `1px solid var(--border)` : "none",
                 }}
               >
-                <p className="message-content text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
+                <p className="message-content text-sm leading-relaxed whitespace-pre-wrap break-words overflow-hidden">
+                  {message.content.length > 1000 ? `${message.content.substring(0, 1000)}...` : message.content}
+                </p>
                 <div className="flex items-center justify-between mt-3 pt-3 border-t border-opacity-20 border-current">
                   <span className="text-xs text-muted-foreground">
                     {message.timestamp.toLocaleTimeString([], {
@@ -262,7 +282,7 @@ export default function ChatPage() {
                 </div>
               </div>
               <div
-                className="p-4 rounded-2xl"
+                className="p-4 rounded-2xl max-w-[200px]"
                 style={{
                   background: "var(--ai-message-bg)",
                   border: `1px solid var(--border)`,
@@ -298,21 +318,24 @@ export default function ChatPage() {
           </div>
         )}
 
-        {/* Input */}
+        {/* Input - Replaced with textarea */}
         <div className="p-6 border-t bg-background">
           <div className="flex gap-3 max-w-3xl mx-auto">
-            <input
+            <textarea
+              ref={textareaRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Type your message..."
-              onKeyPress={(e) => e.key === "Enter" && !e.shiftKey && handleSendMessage()}
+              onKeyDown={handleKeyDown}
+              placeholder="Type your message... (Press Enter to send, Shift+Enter for new line)"
               disabled={isTyping}
-              className="flex-1"
+              className="chat-textarea"
+              rows={1}
             />
             <button
               onClick={() => handleSendMessage()}
               disabled={!input.trim() || isTyping}
               className="btn-primary"
+              style={{ height: "auto", alignSelf: "flex-end" }}
             >
               <Send className="w-5 h-5 text-white" />
             </button>
@@ -320,5 +343,5 @@ export default function ChatPage() {
         </div>
       </div>
     </div>
-  );
+  )
 }
