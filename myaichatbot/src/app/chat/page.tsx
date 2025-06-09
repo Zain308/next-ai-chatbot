@@ -6,8 +6,9 @@ import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { auth } from "@/lib/firebase"
 import { onAuthStateChanged, signOut } from "firebase/auth"
-import { Send, LogOut, Bot, User, Copy } from "lucide-react"
+import { Send, LogOut, Bot, User, Copy, Database, Trash2, Bug } from "lucide-react"
 import DarkModeToggle from "@/components/dark-mode-toggle"
+import { MessageStorage, type ChatMessage } from "@/lib/supabase"
 
 interface Message {
   id: string
@@ -24,15 +25,19 @@ export default function ChatPage() {
   const [isTyping, setIsTyping] = useState(false)
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [error, setError] = useState("")
+  const [memoryStatus, setMemoryStatus] = useState<string>("")
+  const [debugMode, setDebugMode] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const router = useRouter()
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setUser(user)
         setLoading(false)
+        // Load recent messages
+        await loadRecentMessages(user.uid)
       } else {
         router.push("/")
       }
@@ -52,6 +57,47 @@ export default function ChatPage() {
       textareaRef.current.style.height = `${Math.min(scrollHeight, 150)}px`
     }
   }, [input])
+
+  const loadRecentMessages = async (userId: string) => {
+    try {
+      console.log("Loading recent messages for user:", userId)
+      const recentMessages = await MessageStorage.getRecentMessages(userId)
+
+      const formattedMessages: Message[] = recentMessages.map((msg) => ({
+        id: msg.id,
+        content: msg.content,
+        sender: msg.sender,
+        timestamp: new Date(msg.timestamp),
+      }))
+
+      setMessages(formattedMessages)
+      console.log("Loaded messages:", formattedMessages.length)
+
+      if (recentMessages.length > 0) {
+        setMemoryStatus(`✅ Loaded ${recentMessages.length} previous messages`)
+      } else {
+        setMemoryStatus("📝 Starting fresh conversation")
+      }
+      setTimeout(() => setMemoryStatus(""), 4000)
+    } catch (error) {
+      console.error("Failed to load recent messages:", error)
+      setMemoryStatus("⚠️ Using local storage for messages")
+      setTimeout(() => setMemoryStatus(""), 4000)
+    }
+  }
+
+  const saveMessageToDatabase = async (message: Message, userId: string) => {
+    const chatMessage: ChatMessage = {
+      id: message.id,
+      user_id: userId,
+      content: message.content,
+      sender: message.sender,
+      timestamp: message.timestamp.toISOString(),
+    }
+
+    console.log("Saving message:", { sender: message.sender, content: message.content.substring(0, 50) + "..." })
+    await MessageStorage.saveMessage(chatMessage)
+  }
 
   const handleSendMessage = async (messageText?: string) => {
     const text = messageText || input.trim()
@@ -73,7 +119,30 @@ export default function ChatPage() {
     setError("")
     setSuggestions([])
 
+    // Save user message to database immediately
+    if (user) {
+      await saveMessageToDatabase(userMessage, user.uid)
+    }
+
     try {
+      // Get recent messages for context (including the one we just added)
+      console.log("Getting conversation history...")
+      const recentMessages = await MessageStorage.getRecentMessages(user.uid)
+
+      // Build conversation history for AI
+      const conversationHistory = recentMessages.map((msg) => ({
+        role: msg.sender === "user" ? "user" : "assistant",
+        content: msg.content,
+      }))
+
+      console.log("Sending to AI with history:", conversationHistory.length, "messages")
+      if (debugMode) {
+        console.log("Conversation history being sent to AI:")
+        conversationHistory.forEach((msg, index) => {
+          console.log(`${index + 1}. [${msg.role}] ${msg.content.substring(0, 100)}...`)
+        })
+      }
+
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: {
@@ -81,6 +150,8 @@ export default function ChatPage() {
         },
         body: JSON.stringify({
           query: text,
+          conversationHistory: conversationHistory,
+          userId: user.uid, // Add user ID for debugging
         }),
       })
 
@@ -103,6 +174,15 @@ export default function ChatPage() {
 
       setMessages((prev) => [...prev, aiMessage])
       setSuggestions(data.suggestions || [])
+
+      // Save AI message to database
+      if (user) {
+        await saveMessageToDatabase(aiMessage, user.uid)
+      }
+
+      // Show memory status
+      setMemoryStatus(`🧠 AI used ${conversationHistory.length} previous messages for context`)
+      setTimeout(() => setMemoryStatus(""), 3000)
     } catch (error: any) {
       console.error("Error sending message:", error)
       setError(error.message || "Failed to get response")
@@ -139,6 +219,28 @@ export default function ChatPage() {
     navigator.clipboard.writeText(content)
   }
 
+  const clearMessageHistory = async () => {
+    if (user && confirm("Are you sure you want to clear all message history? This cannot be undone.")) {
+      try {
+        await MessageStorage.clearUserMessages(user.uid)
+        setMessages([])
+        setMemoryStatus("🗑️ Message history cleared")
+        setTimeout(() => setMemoryStatus(""), 3000)
+      } catch (error) {
+        console.error("Failed to clear messages:", error)
+        setMemoryStatus("❌ Failed to clear message history")
+        setTimeout(() => setMemoryStatus(""), 3000)
+      }
+    }
+  }
+
+  const debugMessages = async () => {
+    if (user) {
+      await MessageStorage.debugMessages(user.uid)
+      setDebugMode(!debugMode)
+    }
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -155,16 +257,35 @@ export default function ChatPage() {
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-4 border-b bg-background shadow">
         <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-full flex items-center justify-center gradient-accent">
+          <div className="w-10 h-10 rounded-full flex items-center justify-center gradient-accent relative">
             <Bot className="w-5 h-5 text-white" />
+            <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
           </div>
           <div>
             <h1 className="text-lg font-semibold text-foreground">AI Assistant</h1>
-            <p className="text-xs text-muted-foreground">Powered by Gemini AI • Online</p>
+            <p className="text-xs text-muted-foreground flex items-center gap-1">
+              <span>Powered by Gemini AI • Online</span>
+              <Database className="w-3 h-3 text-green-500" />
+              {debugMode && <span className="text-red-500">• DEBUG MODE</span>}
+            </p>
           </div>
         </div>
 
         <div className="flex items-center space-x-4">
+          <button onClick={debugMessages} className="btn-outline hover-scale text-xs px-2 py-1" title="Debug messages">
+            <Bug className="w-3 h-3 mr-1" />
+            Debug
+          </button>
+
+          <button
+            onClick={clearMessageHistory}
+            className="btn-outline hover-scale text-xs px-2 py-1"
+            title="Clear message history"
+          >
+            <Trash2 className="w-3 h-3 mr-1" />
+            Clear
+          </button>
+
           <DarkModeToggle />
           <div className="flex items-center space-x-2">
             <div className="avatar">
@@ -189,6 +310,13 @@ export default function ChatPage() {
         </div>
       </header>
 
+      {/* Memory Status */}
+      {memoryStatus && (
+        <div className="px-6 py-2 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-200 dark:border-blue-800">
+          <p className="text-sm text-blue-700 dark:text-blue-300 text-center">{memoryStatus}</p>
+        </div>
+      )}
+
       {/* Chat Area */}
       <div className="flex-1 flex flex-col">
         {/* Error Alert */}
@@ -207,7 +335,8 @@ export default function ChatPage() {
               </div>
               <h3 className="text-xl font-semibold mb-3 text-foreground">Welcome to AI Assistant</h3>
               <p className="text-sm mb-8 max-w-md mx-auto text-muted-foreground">
-                I'm here to assist you with information, creative tasks, or just a friendly chat.
+                I'm here to assist you with information, creative tasks, or just a friendly chat. I'll remember our last
+                5 messages for better context.
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-lg mx-auto">
                 {["Tell me a joke", "Explain quantum physics", "Write a poem", "Help me code"].map((prompt) => (
