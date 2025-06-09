@@ -161,7 +161,7 @@ export class MemoryManager {
     if (recentSessions.length > 0) {
       contextPrompt += "\nRecent conversation summaries:\n"
       recentSessions.forEach((memory, index) => {
-        if (memory.context.conversationSummary) {
+        if (memory.context && memory.context.conversationSummary) {
           contextPrompt += `${index + 1}. ${memory.context.conversationSummary}\n`
         }
       })
